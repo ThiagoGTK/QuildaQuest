@@ -20,14 +20,25 @@ do monstro e quem encaminhou, grava no Supabase (Postgres) e te avisa por mensag
 (DM) sobre os abates novos. O placar consolidado pode ser postado no grupo a qualquer
 momento disparando o workflow "Post leaderboard" manualmente.
 
+## Status do setup
+
+- [x] Bot criado no BotFather (`@QuildaQuestBot`)
+- [x] Privacy mode desativado
+- [x] `TELEGRAM_BOT_TOKEN` e `TELEGRAM_OWNER_CHAT_ID` preenchidos no `.env`
+- [ ] Bot adicionado ao grupo da guilda
+- [ ] `TELEGRAM_GROUP_ID` descoberto (rodar `npm run whoami` depois do passo acima)
+- [ ] Supabase criado e schema aplicado
+- [ ] Secrets configurados no GitHub Actions
+
 ## Setup
 
 ### 1. Criar o bot no BotFather
 
 1. Fale com [@BotFather](https://t.me/BotFather), rode `/newbot` e siga o assistente.
 2. Anote o token gerado (`TELEGRAM_BOT_TOKEN`).
-3. Ainda no BotFather, rode `/setprivacy`, selecione seu bot e escolha **Disable** — sem
-   isso o bot só enxerga comandos endereçados a ele, não as mensagens normais do grupo.
+3. Ainda no BotFather, rode `/setprivacy`, selecione seu bot (tocando no botão da lista,
+   não digitando o nome) e escolha **Disable** — sem isso o bot só enxerga comandos
+   endereçados a ele, não as mensagens normais do grupo.
 4. Adicione o bot ao grupo da guilda como membro comum (não precisa ser admin).
 5. No privado, dê `/start` no seu bot — é para lá que ele vai te mandar as notificações.
 
