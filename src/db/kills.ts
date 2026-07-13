@@ -7,21 +7,21 @@ export interface KillRecord {
   monsterName: string;
 }
 
-export async function getLastMessageId(): Promise<number> {
+export async function getLastUpdateId(): Promise<number> {
   const { data, error } = await supabase
     .from("sync_state")
-    .select("last_message_id")
+    .select("last_update_id")
     .eq("id", 1)
     .single();
 
   if (error) throw error;
-  return Number(data.last_message_id);
+  return Number(data.last_update_id);
 }
 
-export async function setLastMessageId(messageId: number): Promise<void> {
+export async function setLastUpdateId(updateId: number): Promise<void> {
   const { error } = await supabase
     .from("sync_state")
-    .update({ last_message_id: messageId })
+    .update({ last_update_id: updateId })
     .eq("id", 1);
 
   if (error) throw error;

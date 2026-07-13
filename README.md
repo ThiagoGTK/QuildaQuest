@@ -10,44 +10,46 @@ avisar 5 minutos antes de cada tarefa da guilda expirar.
 
 ## Como funciona
 
-Um userbot (conta pessoal do Telegram, via [GramJS](https://gram.js.org/)) lê o grupo da
-guilda periodicamente. Como um bot comum não consegue ler mensagens normais do grupo sem
-o admin desativar o "privacy mode", usamos a API do usuário (MTProto) para isso.
+Um bot próprio do Telegram (criado via [@BotFather](https://t.me/BotFather), API oficial
+de bots) fica dentro do grupo da guilda com o "privacy mode" desativado, o que permite ler
+todas as mensagens do grupo — sem precisar automatizar nenhuma conta pessoal.
 
-Um workflow do GitHub Actions roda a cada 5 minutos, busca mensagens novas no grupo,
-identifica os cards de combate encaminhados do bot do jogo, extrai o nome do monstro e
-quem encaminhou, e grava no Supabase (Postgres). O placar pode ser postado no grupo a
-qualquer momento disparando o workflow "Post leaderboard" manualmente.
-
-> **Atenção:** automatizar uma conta pessoal do Telegram (userbot) está fora dos Termos de
-> Uso oficiais do Telegram para automação. Para um grupo privado e uso de baixo volume o
-> risco é baixo, mas existe (a conta pode sofrer restrições se o Telegram detectar padrão
-> automatizado).
+Um workflow do GitHub Actions roda a cada hora, busca mensagens novas no grupo (via
+`getUpdates`), identifica os cards de combate encaminhados do bot do jogo, extrai o nome
+do monstro e quem encaminhou, grava no Supabase (Postgres) e te avisa por mensagem privada
+(DM) sobre os abates novos. O placar consolidado pode ser postado no grupo a qualquer
+momento disparando o workflow "Post leaderboard" manualmente.
 
 ## Setup
 
-### 1. Credenciais da API do Telegram
+### 1. Criar o bot no BotFather
 
-Crie um app em https://my.telegram.org/apps e anote `api_id` e `api_hash`.
+1. Fale com [@BotFather](https://t.me/BotFather), rode `/newbot` e siga o assistente.
+2. Anote o token gerado (`TELEGRAM_BOT_TOKEN`).
+3. Ainda no BotFather, rode `/setprivacy`, selecione seu bot e escolha **Disable** — sem
+   isso o bot só enxerga comandos endereçados a ele, não as mensagens normais do grupo.
+4. Adicione o bot ao grupo da guilda como membro comum (não precisa ser admin).
+5. No privado, dê `/start` no seu bot — é para lá que ele vai te mandar as notificações.
 
-### 2. Gerar a sessão (uma única vez, local)
+### 2. Configurar variáveis de ambiente
 
 ```bash
 npm install
 cp .env.example .env
-# preencha TELEGRAM_API_ID e TELEGRAM_API_HASH no .env
-npm run login
+# preencha TELEGRAM_BOT_TOKEN no .env
 ```
 
-Siga o prompt (telefone, código recebido no Telegram, senha de 2FA se houver). No final,
-o script imprime uma string longa — cole em `TELEGRAM_SESSION` no `.env` e também como
-secret no GitHub (veja abaixo). **Nunca** commite esse valor.
+### 3. Descobrir os chat IDs
 
-### 3. ID do grupo
+Com o bot já no grupo e após você ter mandado `/start` nele no privado, rode:
 
-Encaminhe qualquer mensagem do grupo da guilda para [@userinfobot](https://t.me/userinfobot)
-ou use o próprio client para descobrir o ID (negativo, ex: `-1001234567890`). Preencha
-`TELEGRAM_GROUP_ID` no `.env`.
+```bash
+npm run whoami
+```
+
+O script lista os chats vistos recentemente. Preencha `TELEGRAM_GROUP_ID` (o do grupo,
+negativo, ex: `-1001234567890`) e `TELEGRAM_OWNER_CHAT_ID` (o do seu chat privado com o
+bot) no `.env`.
 
 ### 4. Banco de dados (Supabase)
 
@@ -59,7 +61,7 @@ ou use o próprio client para descobrir o ID (negativo, ex: `-1001234567890`). P
 ### 5. Testar localmente
 
 ```bash
-npm run poll         # busca mensagens novas e conta abates
+npm run poll         # busca mensagens novas, conta abates e te avisa por DM
 npm run leaderboard  # posta o placar atual no grupo
 ```
 
@@ -67,16 +69,15 @@ npm run leaderboard  # posta o placar atual no grupo
 
 Em Settings → Secrets and variables → Actions do repositório, crie os secrets:
 
-- `TELEGRAM_API_ID`
-- `TELEGRAM_API_HASH`
-- `TELEGRAM_SESSION`
+- `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_GROUP_ID`
+- `TELEGRAM_OWNER_CHAT_ID`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
 E, opcionalmente, a variável `TELEGRAM_SOURCE_BOT_USERNAME` (padrão: `Teletofus`).
 
-Com isso, o workflow **Poll guild kills** já roda sozinho a cada 5 minutos. O workflow
+Com isso, o workflow **Poll guild kills** já roda sozinho a cada hora. O workflow
 **Post leaderboard** é manual — dispare em Actions → Post leaderboard → Run workflow
 sempre que quiser publicar o placar no grupo.
 
@@ -85,14 +86,14 @@ sempre que quiser publicar o placar no grupo.
 ```
 src/
   config.ts              # variáveis de ambiente
-  telegram/client.ts      # client GramJS
+  telegram/bot.ts         # client da Bot API (getUpdates/sendMessage)
   telegram/parseCard.ts   # parser do card "COMBATE INICIADO"
   db/schema.sql            # schema do Supabase
   db/client.ts              # client Supabase
   db/kills.ts                # queries de abates/placar
-  poll.ts                     # busca mensagens novas e grava abates
+  poll.ts                     # busca mensagens novas, grava abates e avisa por DM
   leaderboard.ts                # monta o texto do placar
 scripts/
-  login.ts                # gera a TELEGRAM_SESSION (rodar 1x, local)
+  whoami.ts                # descobre os chat IDs (grupo e DM) via getUpdates
   postLeaderboard.ts       # dispara o envio do placar
 ```

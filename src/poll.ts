@@ -1,101 +1,68 @@
-import { Api } from "telegram";
-import type { TelegramClient } from "telegram";
-import { createTelegramClient } from "./telegram/client.js";
+import { getUpdates, sendMessage, type TelegramMessage, type TelegramUser } from "./telegram/bot.js";
 import { parseCombatCard } from "./telegram/parseCard.js";
-import { getLastMessageId, insertKills, setLastMessageId, type KillRecord } from "./db/kills.js";
+import { getLastUpdateId, insertKills, setLastUpdateId, type KillRecord } from "./db/kills.js";
 import { buildLeaderboardMessage } from "./leaderboard.js";
 import { config } from "./config.js";
 
-function displayName(sender: unknown): string {
-  if (sender instanceof Api.User) {
-    const name = [sender.firstName, sender.lastName].filter(Boolean).join(" ").trim();
-    return name || (sender.username ? `@${sender.username}` : `id:${sender.id}`);
-  }
-  return "Desconhecido";
+function displayName(user: TelegramUser | undefined): string {
+  if (!user) return "Desconhecido";
+  const name = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
+  return name || (user.username ? `@${user.username}` : `id:${user.id}`);
 }
 
-async function resolveSourceBotId(client: TelegramClient): Promise<bigint | null> {
-  try {
-    const entity = await client.getEntity(config.sourceBotUsername);
-    if (entity instanceof Api.User) {
-      return BigInt(entity.id.toString());
-    }
-  } catch (err) {
-    console.warn(`Não foi possível resolver o bot de origem (@${config.sourceBotUsername}):`, err);
+function forwardedFromSourceBot(message: TelegramMessage): boolean {
+  const origin = message.forward_origin;
+  if (origin?.type === "user") {
+    return origin.sender_user.username?.toLowerCase() === config.sourceBotUsername.toLowerCase();
   }
-  return null;
-}
-
-function isForwardedFromSourceBot(message: Api.Message, sourceBotId: bigint | null): boolean {
-  const fwdFrom = message.fwdFrom;
-  if (!fwdFrom) return false;
-  if (!sourceBotId) return true; // não foi possível resolver o bot; aceita qualquer forward como fallback
-
-  const fromId = fwdFrom.fromId;
-  if (fromId instanceof Api.PeerUser) {
-    return BigInt(fromId.userId.toString()) === sourceBotId;
+  if (message.forward_from) {
+    return message.forward_from.username?.toLowerCase() === config.sourceBotUsername.toLowerCase();
   }
   return false;
 }
 
 export async function pollOnce(): Promise<void> {
-  const client = await createTelegramClient();
+  const lastUpdateId = await getLastUpdateId();
+  const updates = await getUpdates(lastUpdateId + 1);
 
-  try {
-    const sourceBotId = await resolveSourceBotId(client);
-    const lastMessageId = await getLastMessageId();
+  const kills: KillRecord[] = [];
+  let maxUpdateId = lastUpdateId;
 
-    const messages = await client.getMessages(config.telegramGroupId.toString(), {
-      minId: lastMessageId,
-      limit: 200,
+  for (const update of updates) {
+    maxUpdateId = Math.max(maxUpdateId, update.update_id);
+
+    const message = update.message;
+    if (!message) continue;
+    if (BigInt(message.chat.id) !== config.telegramGroupId) continue;
+    if (!forwardedFromSourceBot(message)) continue;
+
+    const parsed = parseCombatCard(message.text ?? message.caption);
+    if (!parsed) continue;
+
+    kills.push({
+      messageId: message.message_id,
+      playerId: message.from?.id ?? 0,
+      playerName: displayName(message.from),
+      monsterName: parsed.monsterName,
     });
+  }
 
-    // getMessages retorna do mais novo para o mais antigo; processa em ordem cronológica
-    const ordered = [...messages].sort((a, b) => a.id - b.id);
+  if (kills.length > 0) {
+    await insertKills(kills);
+    console.log(`Registrados ${kills.length} abate(s).`);
 
-    const kills: KillRecord[] = [];
-    let maxMessageId = lastMessageId;
+    const lines = kills.map((k) => `⚔️ ${k.playerName} abateu ${k.monsterName}`);
+    await sendMessage(config.telegramOwnerChatId, lines.join("\n"));
+  }
 
-    for (const message of ordered) {
-      maxMessageId = Math.max(maxMessageId, message.id);
-
-      if (!isForwardedFromSourceBot(message, sourceBotId)) continue;
-
-      const parsed = parseCombatCard(message.message);
-      if (!parsed) continue;
-
-      const sender = await message.getSender();
-      const playerId = message.senderId ? Number(message.senderId.toString()) : 0;
-
-      kills.push({
-        messageId: message.id,
-        playerId,
-        playerName: displayName(sender),
-        monsterName: parsed.monsterName,
-      });
-    }
-
-    if (kills.length > 0) {
-      await insertKills(kills);
-      console.log(`Registrados ${kills.length} abate(s).`);
-    }
-
-    if (maxMessageId > lastMessageId) {
-      await setLastMessageId(maxMessageId);
-    }
-  } finally {
-    await client.disconnect();
+  if (maxUpdateId > lastUpdateId) {
+    await setLastUpdateId(maxUpdateId);
   }
 }
 
 export async function postLeaderboard(): Promise<void> {
-  const client = await createTelegramClient();
-  try {
-    const text = await buildLeaderboardMessage();
-    await client.sendMessage(config.telegramGroupId.toString(), { message: text });
-  } finally {
-    await client.disconnect();
-  }
+  const text = await buildLeaderboardMessage();
+  await sendMessage(config.telegramGroupId, text);
 }
 
 const isMainModule = process.argv[1] && import.meta.url === `file://${process.argv[1].replace(/\\/g, "/")}`;

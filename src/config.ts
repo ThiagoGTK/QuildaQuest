@@ -9,10 +9,9 @@ function required(name: string): string {
 }
 
 export const config = {
-  telegramApiId: Number(required("TELEGRAM_API_ID")),
-  telegramApiHash: required("TELEGRAM_API_HASH"),
-  telegramSession: required("TELEGRAM_SESSION"),
+  telegramBotToken: required("TELEGRAM_BOT_TOKEN"),
   telegramGroupId: BigInt(required("TELEGRAM_GROUP_ID")),
+  telegramOwnerChatId: BigInt(required("TELEGRAM_OWNER_CHAT_ID")),
   sourceBotUsername: (process.env.TELEGRAM_SOURCE_BOT_USERNAME ?? "Teletofus").replace(/^@/, ""),
   supabaseUrl: required("SUPABASE_URL"),
   supabaseServiceRoleKey: required("SUPABASE_SERVICE_ROLE_KEY"),
