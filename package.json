@@ -1,0 +1,23 @@
+{
+  "name": "quildaquest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Contador de abates da guilda a partir dos cards de combate encaminhados no grupo do Telegram",
+  "type": "module",
+  "scripts": {
+    "login": "tsx scripts/login.ts",
+    "poll": "tsx src/poll.ts",
+    "leaderboard": "tsx scripts/postLeaderboard.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "dotenv": "^16.4.5",
+    "telegram": "^2.26.16"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}
